@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 
 const TaskCard = ({ task, onEdit, onDelete, onUpdateChecklist, onDeleteChecklist, onAddChecklist, onEditChecklist }) => {
   const [newChecklistItem, setNewChecklistItem] = useState('');

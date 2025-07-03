@@ -1,78 +1,83 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import ChecklistModal from '../components/ChecklistModal';
+import TaskModal from '../components/TaskModal';
+import TaskCard from '../components/TaskCard';
+import { axiosInstance } from '../api/axiosInstance';
+import { addChecklistItem, addTask, deleteChecklistItem, deleteTask, setTasks, updateChecklistItem, updateTask } from '../store/taskSlice';
+import { useDispatch, useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
+import { RootState } from '../store/index';
 
 interface ChecklistItem {
-  id: string;
+  _id: string;
   message: string;
   completed: boolean;
 }
 
 interface Task {
-  id: string;
+  _id: string;
   title: string;
   description: string;
   checklist: ChecklistItem[];
 }
 
-export default function App() {
-  const [tasks, setTasks] = useState([]);
-
+const Dashboard = () => {
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const tasks = useSelector((state: RootState) => state.task.tasks);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [editingChecklist, setEditingChecklist] = useState(null);
 
-  // Task operations
-  const addTask = (taskData: Omit<Task, 'id'>) => {
-    const newTask: Task = {
-      ...taskData,
-      id: Date.now().toString(),
+  useEffect(() => {
+    const fetchTasks = async () => {
+      try {
+        const res = await axiosInstance.get('/tasks');
+        dispatch(setTasks(res.data.tasks));
+      } catch (err) {
+        console.error('Failed to fetch tasks:', err);
+      }
     };
-    setTasks([...tasks, newTask]);
+    fetchTasks();
+  }, []);
+
+  const handleAddTask = async (taskData: Omit<Task, '_id'>) => {
+    const res = await axiosInstance.post('/tasks', taskData);
+    dispatch(addTask(res.data.task));
   };
 
-  const updateTask = (taskId: string, taskData: Omit<Task, 'id'>) => {
-    setTasks(tasks.map(task => 
-      task.id === taskId ? { ...taskData, id: taskId } : task
-    ));
+  const handleUpdateTask = async (taskId: string, taskData: Omit<Task, '_id'>) => {
+    await axiosInstance.put(`/tasks/${taskId}`, taskData);
+    dispatch(updateTask({ id: taskId, data: taskData }));
   };
 
-  const deleteTask = (taskId: string) => {
-    setTasks(tasks.filter(task => task.id !== taskId));
+  const handleDeleteTask = async (taskId: string) => {
+    await axiosInstance.delete(`/tasks/${taskId}`);
+    dispatch(deleteTask(taskId));
   };
 
-  // Checklist operations
-  const addChecklistItem = (taskId: string, message: string) => {
-    const newItem: ChecklistItem = {
-      id: `${taskId}-${Date.now()}`,
-      message,
-      completed: false
-    };
-    
-    setTasks(tasks.map(task =>
-      task.id === taskId
-        ? { ...task, checklist: [...task.checklist, newItem] }
-        : task
-    ));
+  const handleAddChecklistItem = async (taskId: string, message: string) => {
+    const res = await axiosInstance.post(`/tasks/${taskId}/checklist`, { message });
+    dispatch(addChecklistItem({ taskId, message: res.data.item.message, _id: res.data.item._id }));
   };
 
-  const updateChecklistItem = (taskId: string, itemId: string, updates: Partial<ChecklistItem>) => {
-    setTasks(tasks.map(task =>
-      task.id === taskId
-        ? {
-            ...task,
-            checklist: task.checklist.map(item =>
-              item.id === itemId ? { ...item, ...updates } : item
-            )
-          }
-        : task
-    ));
+  const handleUpdateChecklistItem = async (
+    taskId: string,
+    itemId: string,
+    updates: Partial<ChecklistItem>
+  ) => {
+    await axiosInstance.put(`/tasks/${taskId}/checklist/${itemId}`, updates);
+    dispatch(updateChecklistItem({ taskId, itemId, updates }));
   };
 
-  const deleteChecklistItem = (taskId: string, itemId: string) => {
-    setTasks(tasks.map(task =>
-      task.id === taskId
-        ? { ...task, checklist: task.checklist.filter(item => item.id !== itemId) }
-        : task
-    ));
+  const handleDeleteChecklistItem = async (taskId: string, itemId: string) => {
+    await axiosInstance.delete(`/tasks/${taskId}/checklist/${itemId}`);
+    dispatch(deleteChecklistItem({ taskId, itemId }));
+  };
+
+  const handleLogout = async () => {
+    await axiosInstance.post('/auth/logout');
+    navigate('/login');
   };
 
   const openModal = (task?: Task) => {
@@ -90,25 +95,33 @@ export default function App() {
       <div className="max-w-4xl mx-auto">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8">
           <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4 sm:mb-0">Task Manager</h1>
+
           <button
             onClick={() => openModal()}
             className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
           >
             Add New Task
           </button>
+
+          <button
+            onClick={handleLogout}
+            className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg font-medium ml-2"
+          >
+            Logout
+          </button>
         </div>
 
         <div className="grid gap-6 sm:gap-8">
           {tasks.map(task => (
-            <div key={task.id}>
+            <div key={task._id}>
               <TaskCard
                 task={task}
                 onEdit={() => openModal(task)}
-                onDelete={() => deleteTask(task.id)}
-                onUpdateChecklist={(itemId, updates) => updateChecklistItem(task.id, itemId, updates)}
-                onDeleteChecklist={(itemId) => deleteChecklistItem(task.id, itemId)}
-                onAddChecklist={(message) => addChecklistItem(task.id, message)}
-                onEditChecklist={(item) => setEditingChecklist({taskId: task.id, item})}
+                onDelete={() => handleDeleteTask(task._id)}
+                onUpdateChecklist={(itemId, updates) => handleUpdateChecklistItem(task._id, itemId, updates)}
+                onDeleteChecklist={(itemId) => handleDeleteChecklistItem(task._id, itemId)}
+                onAddChecklist={(message) => handleAddChecklistItem(task._id, message)}
+                onEditChecklist={(item) => setEditingChecklist({ taskId: task._id, item })}
               />
             </div>
           ))}
@@ -132,9 +145,9 @@ export default function App() {
           task={editingTask}
           onSave={(taskData) => {
             if (editingTask) {
-              updateTask(editingTask.id, taskData);
+              handleUpdateTask(editingTask._id, taskData);
             } else {
-              addTask(taskData);
+              handleAddTask(taskData);
             }
             closeModal();
           }}
@@ -146,7 +159,7 @@ export default function App() {
         <ChecklistModal
           item={editingChecklist.item}
           onSave={(message) => {
-            updateChecklistItem(editingChecklist.taskId, editingChecklist.item.id, { message });
+            handleUpdateChecklistItem(editingChecklist.taskId, editingChecklist.item._id, { message });
             setEditingChecklist(null);
           }}
           onClose={() => setEditingChecklist(null)}
@@ -154,245 +167,6 @@ export default function App() {
       )}
     </div>
   );
-}
+};
 
-function TaskCard({ task, onEdit, onDelete, onUpdateChecklist, onDeleteChecklist, onAddChecklist, onEditChecklist }) {
-  const [newChecklistItem, setNewChecklistItem] = useState('');
-  const [isAddingItem, setIsAddingItem] = useState(false);
-
-  const completedCount = task.checklist.filter(item => item.completed).length;
-  const totalCount = task.checklist.length;
-
-  const handleAddChecklistItem = () => {
-    if (newChecklistItem.trim()) {
-      onAddChecklist(newChecklistItem.trim());
-      setNewChecklistItem('');
-      setIsAddingItem(false);
-    }
-  };
-
-  return (
-    <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4">
-        <div className="flex-1 mb-4 sm:mb-0">
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">{task.title}</h3>
-          <p className="text-gray-600">{task.description}</p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={onEdit}
-            className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded text-sm transition-colors"
-          >
-            Edit
-          </button>
-          <button
-            onClick={onDelete}
-            className="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded text-sm transition-colors"
-          >
-            Delete
-          </button>
-        </div>
-      </div>
-
-      <div className="mb-4">
-        <div className="flex items-center justify-between mb-3">
-          <h4 className="text-lg font-medium text-gray-800">Checklist</h4>
-          <span className="text-sm text-gray-500">
-            {completedCount} of {totalCount} completed
-          </span>
-        </div>
-        
-        {totalCount > 0 && (
-          <div className="w-full bg-gray-200 rounded-full h-2 mb-4">
-            <div
-              className="bg-green-600 h-2 rounded-full transition-all duration-300"
-              style={{ width: `${(completedCount / totalCount) * 100}%` }}
-            ></div>
-          </div>
-        )}
-
-        <div className="space-y-2">
-          {task.checklist.map(item => (
-            <div key={item.id} className="flex items-center gap-3 p-2 rounded hover:bg-gray-50">
-              <input
-                type="checkbox"
-                checked={item.completed}
-                onChange={(e) => onUpdateChecklist(item.id, { completed: e.target.checked })}
-                className="w-4 h-4 text-blue-600 rounded"
-              />
-              <span className={`flex-1 ${item.completed ? 'line-through text-gray-500' : 'text-gray-800'}`}>
-                {item.message}
-              </span>
-              <button
-                onClick={() => onEditChecklist(item)}
-                className="text-blue-600 hover:text-blue-700 text-sm"
-              >
-                Edit
-              </button>
-              <button
-                onClick={() => onDeleteChecklist(item.id)}
-                className="text-red-600 hover:text-red-700 text-sm"
-              >
-                Delete
-              </button>
-            </div>
-          ))}
-        </div>
-
-        {isAddingItem ? (
-          <div className="flex gap-2 mt-3">
-            <input
-              type="text"
-              value={newChecklistItem}
-              onChange={(e) => setNewChecklistItem(e.target.value)}
-              placeholder="Enter checklist item"
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              onKeyPress={(e) => e.key === 'Enter' && handleAddChecklistItem()}
-              autoFocus
-            />
-            <button
-              onClick={handleAddChecklistItem}
-              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm transition-colors"
-            >
-              Add
-            </button>
-            <button
-              onClick={() => {
-                setIsAddingItem(false);
-                setNewChecklistItem('');
-              }}
-              className="bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded-lg text-sm transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={() => setIsAddingItem(true)}
-            className="mt-3 text-blue-600 hover:text-blue-700 text-sm font-medium"
-          >
-            + Add Checklist Item
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function TaskModal({ task, onSave, onClose }) {
-  const [title, setTitle] = useState(task?.title || '');
-  const [description, setDescription] = useState(task?.description || '');
-
-  const handleSave = () => {
-    if (title.trim()) {
-      onSave({
-        title: title.trim(),
-        description: description.trim(),
-        checklist: task?.checklist || []
-      });
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md">
-        <h2 className="text-2xl font-bold mb-4">
-          {task ? 'Edit Task' : 'Add New Task'}
-        </h2>
-        
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Title
-            </label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Enter task title"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Description
-            </label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              rows={3}
-              placeholder="Enter task description"
-            />
-          </div>
-        </div>
-
-        <div className="flex gap-3 mt-6">
-          <button
-            onClick={handleSave}
-            disabled={!title.trim()}
-            className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white py-2 rounded-lg font-medium transition-colors"
-          >
-            {task ? 'Update' : 'Add'} Task
-          </button>
-          <button
-            onClick={onClose}
-            className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 py-2 rounded-lg font-medium transition-colors"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ChecklistModal({ item, onSave, onClose }) {
-  const [message, setMessage] = useState(item.message);
-
-  const handleSave = () => {
-    if (message.trim()) {
-      onSave(message.trim());
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md">
-        <h2 className="text-2xl font-bold mb-4">Edit Checklist Item</h2>
-        
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Message
-            </label>
-            <input
-              type="text"
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Enter checklist item message"
-            />
-          </div>
-        </div>
-
-        <div className="flex gap-3 mt-6">
-          <button
-            onClick={handleSave}
-            disabled={!message.trim()}
-            className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white py-2 rounded-lg font-medium transition-colors"
-          >
-            Update Item
-          </button>
-          <button
-            onClick={onClose}
-            className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 py-2 rounded-lg font-medium transition-colors"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
+export default Dashboard;
