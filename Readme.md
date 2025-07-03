@@ -2,12 +2,10 @@
 
 This document outlines the strategic steps, challenges, and tools related to implementing offline-first capabilities in modern frontend/backend applications.
 
----
 
 ## 1. Outline the initial steps you would take to transition the frontend/backend to support an offline-first approach.
 
 First, I’d add local storage to save the user's login state and task list so the app can still work without internet. Then, I’d use something like IndexedDB (or a simpler tool like localForage) to store data more reliably. I’d also set up a system that quietly saves changes in the background and syncs them once the user is back online. On the backend, I’d create APIs that can handle multiple updates at once. Finally, I’d make sure to deal with any data conflicts using timestamps or simple version checks.
----
 
 ## 2. Drawing from your own experience with offline functionalities, what challenges have you encountered when implementing or maintaining offline modes?
 
