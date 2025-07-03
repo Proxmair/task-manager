@@ -1,4 +1,3 @@
-// src/api/axiosInstance.ts
 import axios from 'axios';
 import { toast } from 'react-toastify';
 
@@ -7,10 +6,8 @@ export const axiosInstance = axios.create({
   withCredentials: true,
 });
 
-// ✅ Response Interceptor
 axiosInstance.interceptors.response.use(
   (response) => {
-    // ✅ Show success toast if message exists
     if (response.data?.message) {
       toast.success(response.data.message);
     }
