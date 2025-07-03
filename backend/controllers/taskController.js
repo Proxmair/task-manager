@@ -111,8 +111,6 @@ export const updateChecklistItem = async (req, res) => {
     const { taskId, itemId } = req.params;
     const { message, completed } = req.body;
 
-    console.log("Updating checklist item:", { taskId, itemId, message, completed });
-
     if (!req.user) return res.status(401).json({ message: "Unauthorized" });
 
     try {
